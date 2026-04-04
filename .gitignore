@@ -1,0 +1,7 @@
+.claude/
+autoworkers-1st/
+autoworkers-2st-script/
+.venv/
+.env
+.DS_Store
+__pycache__/

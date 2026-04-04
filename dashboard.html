@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+/* ── 변수 ──────────────────────────────────────────── */
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --primary: #6366f1;
+  --primary-light: #e0e7ff;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --pink: #ec4899;
+  --heatmap-0: #f1f5f9;
+  --heatmap-1: #c7d2fe;
+  --heatmap-2: #818cf8;
+  --heatmap-3: #6366f1;
+  --heatmap-4: #4338ca;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ── 헤더 ──────────────────────────────────────────── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+.logo {
+  font-size: 1.4rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary), var(--pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-right { display: flex; align-items: center; gap: 12px; }
+.last-sync { font-size: 0.8rem; color: var(--text-secondary); }
+
+/* ── 버튼 ──────────────────────────────────────────── */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.btn-primary { background: var(--primary); color: white; }
+.btn-sync { background: var(--primary-light); color: var(--primary); }
+.btn-sync.syncing .sync-icon { animation: spin 1s linear infinite; }
+.btn-settings { background: var(--bg); color: var(--text-secondary); }
+.btn-small { padding: 4px 12px; font-size: 0.8rem; background: var(--primary-light); color: var(--primary); border: none; border-radius: 6px; cursor: pointer; }
+.btn-danger { background: #fee2e2; color: var(--danger); }
+.btn-full { width: 100%; justify-content: center; padding: 12px; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ── 대시보드 ──────────────────────────────────────── */
+.dashboard { max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+.section { background: var(--surface); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+.section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* ── 채널 카드 ─────────────────────────────────────── */
+.channel-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.channel-card {
+  border-radius: var(--radius);
+  padding: 20px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+.channel-card::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -50%;
+  width: 100%; height: 100%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+}
+.channel-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.channel-thumb { width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); }
+.channel-card-name { font-weight: 600; font-size: 1rem; }
+.channel-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-item { display: flex; flex-direction: column; }
+.stat-value { font-size: 1.3rem; font-weight: 700; }
+.stat-label { font-size: 0.75rem; opacity: 0.8; }
+.stat-change { font-size: 0.75rem; opacity: 0.9; margin-top: 2px; }
+.stat-change.positive { color: #bbf7d0; }
+.stat-change.negative { color: #fecaca; }
+.channel-card.total-card { background: linear-gradient(135deg, #1e293b, #334155); border: 2px solid var(--border); }
+
+/* ── 히트맵 ────────────────────────────────────────── */
+.heatmap-container { overflow-x: auto; }
+.heatmap-months { display: flex; margin-left: 32px; margin-bottom: 4px; font-size: 0.75rem; color: var(--text-secondary); }
+.heatmap-months span { flex: 1; min-width: 55px; }
+.heatmap-wrapper { display: flex; gap: 4px; }
+.heatmap-days { display: flex; flex-direction: column; justify-content: space-between; padding: 2px 4px; font-size: 0.7rem; color: var(--text-secondary); width: 28px; height: 90px; }
+.heatmap { display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; gap: 3px; }
+.heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--heatmap-0); transition: all 0.15s; cursor: pointer; }
+.heatmap-cell:hover { outline: 2px solid var(--primary); outline-offset: 1px; }
+.heatmap-cell[data-level="1"] { background: var(--heatmap-1); }
+.heatmap-cell[data-level="2"] { background: var(--heatmap-2); }
+.heatmap-cell[data-level="3"] { background: var(--heatmap-3); }
+.heatmap-cell[data-level="4"] { background: var(--heatmap-4); }
+.heatmap-cell.future { background: transparent; border: 1px dashed var(--border); }
+.heatmap-tooltip { position: fixed; background: var(--text); color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; pointer-events: none; z-index: 1000; display: none; white-space: nowrap; }
+.heatmap-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 8px; font-size: 0.75rem; color: var(--text-secondary); }
+.legend-cell { width: 12px; height: 12px; border-radius: 2px; }
+.year-select, .channel-select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; background: var(--bg); color: var(--text); }
+.streak-info { display: flex; gap: 24px; margin-top: 12px; padding: 12px 16px; background: var(--bg); border-radius: 8px; }
+.streak-item { display: flex; align-items: center; gap: 8px; }
+.streak-number { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+.streak-label { font-size: 0.85rem; color: var(--text-secondary); }
+
+/* ── 마일스톤 ──────────────────────────────────────── */
+.milestones { display: flex; flex-direction: column; gap: 16px; }
+.milestone-item { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg); border-radius: 8px; position: relative; }
+.milestone-item.achieved { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 1px solid #a7f3d0; }
+.milestone-color { width: 4px; height: 100%; border-radius: 2px; position: absolute; left: 0; top: 0; }
+.milestone-info { flex: 1; padding-left: 8px; }
+.milestone-title { font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+.milestone-channel-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; color: white; font-weight: 500; }
+.milestone-detail { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+.milestone-progress-container { flex: 1; max-width: 300px; }
+.milestone-progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.milestone-progress-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+.milestone-progress-text { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; text-align: right; }
+.milestone-delete { background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 1.2rem; padding: 4px; opacity: 0; transition: opacity 0.2s; }
+.milestone-item:hover .milestone-delete { opacity: 1; }
+
+/* ── 차트 ──────────────────────────────────────────── */
+.chart-container { height: 300px; position: relative; }
+
+/* ── 모달 ──────────────────────────────────────────── */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 200; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); width: 90%; max-width: 480px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.modal-header h2 { font-size: 1.1rem; }
+.modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 4px; }
+.modal-body { padding: 24px; }
+.modal-body hr { margin: 20px 0; border: none; border-top: 1px solid var(--border); }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px; }
+.form-group input, .form-group select, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; transition: border-color 0.2s; }
+.form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.form-group small { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--text-secondary); }
+.color-picker { display: flex; gap: 8px; }
+.color-option { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: all 0.2s; }
+.color-option.selected { border-color: var(--text); transform: scale(1.1); }
+.color-option:hover { transform: scale(1.1); }
+.registered-channel { display: flex; align-items: center; justify-content: space-between; padding: 12px; margin-bottom: 8px; background: var(--bg); border-radius: 8px; }
+.registered-channel-info { display: flex; align-items: center; gap: 10px; }
+.registered-channel-thumb { width: 32px; height: 32px; border-radius: 50%; }
+.registered-channel-color { width: 12px; height: 12px; border-radius: 50%; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+.empty-state p { margin-bottom: 12px; }
+
+/* ── 토스트 ────────────────────────────────────────── */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: white; padding: 12px 20px; border-radius: 8px; font-size: 0.9rem; box-shadow: var(--shadow-lg); transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 300; }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+
+/* ── API 키 배너 ───────────────────────────────────── */
+.api-banner { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1px solid #f59e0b; border-radius: var(--radius); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.api-banner p { font-size: 0.9rem; color: #92400e; }
+.api-banner .btn { white-space: nowrap; }
+
+/* ── 반응형 ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .header { padding: 12px 16px; flex-direction: column; gap: 12px; }
+  .dashboard { padding: 16px; }
+  .channel-cards { grid-template-columns: 1fr; }
+  .streak-info { flex-direction: column; gap: 12px; }
+  .milestone-item { flex-direction: column; align-items: flex-start; }
+  .milestone-progress-container { max-width: 100%; width: 100%; }
+}
+  </style>
+</head>
+<body>
+
+  <!-- 헤더 -->
+  <header class="header">
+    <h1 class="logo">YouTube Dashboard</h1>
+    <div class="header-right">
+      <span class="last-sync" id="lastSync"></span>
+      <button class="btn btn-sync" id="syncBtn" onclick="syncData()">
+        <span class="sync-icon">&#8635;</span> 동기화
+      </button>
+      <button class="btn btn-settings" onclick="openModal('settingsModal')">&#9881; 설정</button>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <!-- API 키 배너 -->
+    <div class="api-banner" id="apiBanner" style="display:none">
+      <p>YouTube API 키가 설정되지 않았습니다. 설정에서 API 키를 입력해주세요.</p>
+      <button class="btn btn-primary" onclick="openModal('settingsModal')">설정 열기</button>
+    </div>
+
+    <!-- 채널 카드 -->
+    <section class="section">
+      <h2 class="section-title">채널 요약</h2>
+      <div class="channel-cards" id="channelCards">
+        <div class="empty-state"><p>등록된 채널이 없습니다</p>
+          <button class="btn btn-primary" onclick="openModal('settingsModal')">채널 추가하기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 잔디 히트맵 -->
+    <section class="section">
+      <h2 class="section-title">
+        업로드 잔디
+        <select id="heatmapYear" class="year-select" onchange="renderHeatmap()"></select>
+        <select id="heatmapChannel" class="channel-select" onchange="renderHeatmap()">
+          <option value="">전체 채널</option>
+        </select>
+      </h2>
+      <div class="heatmap-container">
+        <div class="heatmap-months" id="heatmapMonths"></div>
+        <div class="heatmap-wrapper">
+          <div class="heatmap-days"><span>월</span><span>수</span><span>금</span></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+        <div class="heatmap-legend">
+          <span>적음</span>
+          <div class="legend-cell" style="background:var(--heatmap-0)"></div>
+          <div class="legend-cell" style="background:var(--heatmap-1)"></div>
+          <div class="legend-cell" style="background:var(--heatmap-2)"></div>
+          <div class="legend-cell" style="background:var(--heatmap-3)"></div>
+          <div class="legend-cell" style="background:var(--heatmap-4)"></div>
+          <span>많음</span>
+        </div>
+      </div>
+      <div class="streak-info" id="streakInfo"></div>
+    </section>
+
+    <!-- 마일스톤 -->
+    <section class="section">
+      <h2 class="section-title">
+        마일스톤 목표
+        <button class="btn btn-small" onclick="openMilestoneModal()">+ 추가</button>
+      </h2>
+      <div class="milestones" id="milestones">
+        <div class="empty-state"><p>설정된 목표가 없습니다</p></div>
+      </div>
+    </section>
+
+    <!-- 월간 업로드 차트 -->
+    <section class="section">
+      <h2 class="section-title">월간 업로드 현황</h2>
+      <div class="chart-container">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <!-- 설정 모달 -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>설정</h2>
+        <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>YouTube API 키</label>
+          <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+          <small><a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary);text-decoration:underline">Google Cloud Console</a> &gt; API 및 서비스 &gt; 사용자 인증 정보에서 발급</small>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="saveApiKey()" style="margin-bottom:8px">API 키 저장</button>
+
+        <hr>
+        <h3 style="margin-bottom:12px">채널 추가</h3>
+        <div class="form-group">
+          <label>YouTube 채널 ID</label>
+          <input type="text" id="channelIdInput" placeholder="URL, @핸들, 또는 UC... 채널 ID">
+          <small>예: https://www.youtube.com/@채널명, @채널명, UC...</small>
+        </div>
+        <div class="form-group">
+          <label>채널 색상</label>
+          <div class="color-picker" id="colorPicker">
+            <button class="color-option selected" data-color="#6366f1" style="background:#6366f1"></button>
+            <button class="color-option" data-color="#ec4899" style="background:#ec4899"></button>
+            <button class="color-option" data-color="#14b8a6" style="background:#14b8a6"></button>
+            <button class="color-option" data-color="#f59e0b" style="background:#f59e0b"></button>
+            <button class="color-option" data-color="#ef4444" style="background:#ef4444"></button>
+            <button class="color-option" data-color="#22c55e" style="background:#22c55e"></button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="addChannel()">채널 추가</button>
+
+        <hr>
+        <h3 style="margin-bottom:12px">등록된 채널</h3>
+        <div id="registeredChannels"></div>
+
+        <hr>
+        <h3 style="margin-bottom:12px">데이터 관리</h3>
+        <button class="btn btn-full" style="background:var(--bg);margin-bottom:8px" onclick="exportData()">데이터 내보내기 (JSON)</button>
+        <label class="btn btn-full" style="background:var(--bg);cursor:pointer;text-align:center">
+          데이터 가져오기 (JSON)
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 마일스톤 추가 모달 -->
+  <div class="modal-overlay" id="milestoneModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>마일스톤 추가</h2>
+        <button class="modal-close" onclick="closeModal('milestoneModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>채널</label>
+          <select id="milestoneChannel" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label>목표 유형</label>
+          <select id="milestoneType" class="form-select">
+            <option value="subscribers">구독자 수</option>
+            <option value="videos">영상 수</option>
+            <option value="views">조회수</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>목표 값</label>
+          <input type="number" id="milestoneValue" placeholder="예: 1000">
+        </div>
+        <button class="btn btn-primary btn-full" onclick="addMilestone()">목표 추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 툴팁 -->
+  <div class="heatmap-tooltip" id="tooltip"></div>
+
+<script>
+// =====================================================
+//  YouTube Dashboard - Single HTML Version
+//  모든 데이터는 localStorage에 저장됩니다
+// =====================================================
+
+// ── localStorage 키 ──────────────────────────────────
+const STORAGE = {
+  API_KEY:    'yt_dash_api_key',
+  CHANNELS:   'yt_dash_channels',
+  SNAPSHOTS:  'yt_dash_snapshots',
+  VIDEOS:     'yt_dash_videos',
+  MILESTONES: 'yt_dash_milestones',
+  LAST_SYNC:  'yt_dash_last_sync',
+};
+
+// ── 상태 ─────────────────────────────────────────────
+let selectedColor = '#6366f1';
+let monthlyChartInstance = null;
+
+function load(key)   { try { return JSON.parse(localStorage.getItem(key)) || null; } catch { return null; } }
+function save(key, v) { localStorage.setItem(key, JSON.stringify(v)); }
+function getChannels()  { return load(STORAGE.CHANNELS) || []; }
+function getSnapshots() { return load(STORAGE.SNAPSHOTS) || {}; }
+function getVideos()    { return load(STORAGE.VIDEOS) || []; }
+function getMilestones(){ return load(STORAGE.MILESTONES) || []; }
+function getApiKey()    { return localStorage.getItem(STORAGE.API_KEY) || ''; }
+
+// ── 초기화 ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initColorPicker();
+  initYearSelect();
+  checkApiKey();
+  refreshAll();
+
+  const lastSync = localStorage.getItem(STORAGE.LAST_SYNC);
+  if (lastSync) {
+    document.getElementById('lastSync').textContent =
+      '마지막 동기화: ' + new Date(lastSync).toLocaleString('ko-KR');
+  }
+});
+
+function refreshAll() {
+  renderChannelCards();
+  renderHeatmap();
+  renderMilestones();
+  renderMonthlyChart();
+  updateChannelSelects();
+  updateRegisteredChannels();
+}
+
+function checkApiKey() {
+  document.getElementById('apiBanner').style.display = getApiKey() ? 'none' : 'flex';
+  document.getElementById('apiKeyInput').value = getApiKey() ? '********' : '';
+}
+
+// ── YouTube API 호출 ─────────────────────────────────
+async function ytApi(endpoint, params = {}) {
+  const key = getApiKey();
+  if (!key) throw new Error('API 키가 설정되지 않았습니다');
+
+  const url = new URL('https://www.googleapis.com/youtube/v3/' + endpoint);
+  url.searchParams.set('key', key);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null) url.searchParams.set(k, v);
+  }
+
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'YouTube API 오류');
+  return data;
+}
+
+function parseChannelInput(input) {
+  input = input.trim();
+  // URL에서 핸들 추출: youtube.com/@핸들명
+  const handleMatch = input.match(/youtube\.com\/@([^\/\?]+)/);
+  if (handleMatch) return { type: 'handle', value: '@' + decodeURIComponent(handleMatch[1]) };
+  // URL에서 채널 ID 추출: youtube.com/channel/UC...
+  const idMatch = input.match(/youtube\.com\/channel\/(UC[^\/\?]+)/);
+  if (idMatch) return { type: 'id', value: idMatch[1] };
+  // @핸들 직접 입력
+  if (input.startsWith('@')) return { type: 'handle', value: input };
+  // UC... 채널 ID 직접 입력
+  if (input.startsWith('UC')) return { type: 'id', value: input };
+  // 그 외는 핸들로 시도
+  return { type: 'handle', value: '@' + input };
+}
+
+async function fetchChannelInfo(input) {
+  const parsed = parseChannelInput(input);
+  let data;
+
+  if (parsed.type === 'id') {
+    data = await ytApi('channels', { part: 'snippet,statistics', id: parsed.value });
+  } else {
+    // 핸들: forHandle 시도
+    data = await ytApi('channels', { part: 'snippet,statistics', forHandle: parsed.value });
+
+    // forHandle 실패 시 검색으로 폴백
+    if (!data.items || data.items.length === 0) {
+      const handleName = parsed.value.replace('@', '');
+      const searchData = await ytApi('search', { part: 'snippet', q: handleName, type: 'channel', maxResults: 1 });
+      if (searchData.items && searchData.items.length > 0) {
+        const chId = searchData.items[0].snippet.channelId;
+        data = await ytApi('channels', { part: 'snippet,statistics', id: chId });
+      }
+    }
+  }
+
+  if (!data.items || data.items.length === 0) throw new Error('채널을 찾을 수 없습니다: ' + input);
+
+  const ch = data.items[0];
+  return {
+    id: ch.id,
+    name: ch.snippet.title,
+    thumbnail: ch.snippet.thumbnails.default.url,
+    subscribers: parseInt(ch.statistics.subscriberCount) || 0,
+    views: parseInt(ch.statistics.viewCount) || 0,
+    videoCount: parseInt(ch.statistics.videoCount) || 0,
+  };
+}
+
+async function fetchChannelVideos(channelId, publishedAfter) {
+  const videos = [];
+  let pageToken = null;
+
+  do {
+    const params = {
+      part: 'snippet',
+      channelId,
+      type: 'video',
+      order: 'date',
+      maxResults: 50,
+      pageToken: pageToken || undefined,
+    };
+    if (publishedAfter) params.publishedAfter = publishedAfter;
+
+    const data = await ytApi('search', params);
+    for (const item of (data.items || [])) {
+      videos.push({
+        id: item.id.videoId,
+        channelId,
+        title: item.snippet.title,
+        publishedAt: item.snippet.publishedAt,
+      });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return videos;
+}
+
+// ── 동기화 ───────────────────────────────────────────
+async function syncData() {
+  const key = getApiKey();
+  if (!key) { showToast('먼저 API 키를 설정해주세요', 'error'); return; }
+
+  const channels = getChannels();
+  if (channels.length === 0) { showToast('등록된 채널이 없습니다', 'error'); return; }
+
+  const btn = document.getElementById('syncBtn');
+  btn.classList.add('syncing');
+  btn.disabled = true;
+
+  try {
+    const snapshots = getSnapshots();
+    let allVideos = getVideos();
+    const today = toDateStr(new Date());
+
+    for (const ch of channels) {
+      // 채널 통계 스냅샷
+      const info = await fetchChannelInfo(ch.id);
+      ch.name = info.name;
+      ch.thumbnail = info.thumbnail;
+
+      const snapKey = ch.id + '_' + today;
+      snapshots[snapKey] = {
+        channelId: ch.id,
+        date: today,
+        subscribers: info.subscribers,
+        views: info.views,
+        videoCount: info.videoCount,
+      };
+
+      // 최근 영상 가져오기
+      const existing = allVideos.filter(v => v.channelId === ch.id);
+      const lastDate = existing.length > 0
+        ? existing.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0].publishedAt
+        : null;
+
+      const newVideos = await fetchChannelVideos(ch.id, lastDate);
+      const existingIds = new Set(allVideos.map(v => v.id));
+      for (const v of newVideos) {
+        if (!existingIds.has(v.id)) {
+          allVideos.push(v);
+        }
+      }
+    }
+
+    save(STORAGE.CHANNELS, channels);
+    save(STORAGE.SNAPSHOTS, snapshots);
+    save(STORAGE.VIDEOS, allVideos);
+
+    const now = new Date().toISOString();
+    localStorage.setItem(STORAGE.LAST_SYNC, now);
+    document.getElementById('lastSync').textContent =
+      '마지막 동기화: ' + new Date(now).toLocaleString('ko-KR');
+
+    showToast('동기화 완료!', 'success');
+    refreshAll();
+  } catch (err) {
+    showToast('동기화 실패: ' + err.message, 'error');
+  } finally {
+    btn.classList.remove('syncing');
+    btn.disabled = false;
+  }
+}
+
+// ── 채널 관리 ────────────────────────────────────────
+async function addChannel() {
+  const channelId = document.getElementById('channelIdInput').value.trim();
+  if (!channelId) { showToast('채널 ID를 입력해주세요', 'error'); return; }
+
+  try {
+    const info = await fetchChannelInfo(channelId);
+    const channels = getChannels();
+
+    if (channels.find(c => c.id === info.id)) {
+      showToast('이미 등록된 채널입니다', 'error');
+      return;
+    }
+
+    channels.push({
+      id: info.id,
+      name: info.name,
+      thumbnail: info.thumbnail,
+      color: selectedColor,
+    });
+
+    // 초기 스냅샷
+    const snapshots = getSnapshots();
+    const today = toDateStr(new Date());
+    snapshots[info.id + '_' + today] = {
+      channelId: info.id,
+      date: today,
+      subscribers: info.subscribers,
+      views: info.views,
+      videoCount: info.videoCount,
+    };
+
+    save(STORAGE.CHANNELS, channels);
+    save(STORAGE.SNAPSHOTS, snapshots);
+
+    document.getElementById('channelIdInput').value = '';
+    showToast(info.name + ' 채널이 추가되었습니다!', 'success');
+
+    // 백그라운드로 영상 수집
+    fetchChannelVideos(info.id, null).then(videos => {
+      const allVideos = getVideos();
+      const ids = new Set(allVideos.map(v => v.id));
+      for (const v of videos) {
+        if (!ids.has(v.id)) allVideos.push(v);
+      }
+      save(STORAGE.VIDEOS, allVideos);
+      refreshAll();
+    }).catch(() => {});
+
+    refreshAll();
+  } catch (err) {
+    showToast('채널 추가 실패: ' + err.message, 'error');
+  }
+}
+
+function removeChannel(id) {
+  if (!confirm('이 채널을 삭제하시겠습니까?')) return;
+
+  const channels = getChannels().filter(c => c.id !== id);
+  save(STORAGE.CHANNELS, channels);
+
+  // 관련 데이터 삭제
+  const snapshots = getSnapshots();
+  for (const key of Object.keys(snapshots)) {
+    if (key.startsWith(id + '_')) delete snapshots[key];
+  }
+  save(STORAGE.SNAPSHOTS, snapshots);
+
+  const videos = getVideos().filter(v => v.channelId !== id);
+  save(STORAGE.VIDEOS, videos);
+
+  const milestones = getMilestones().filter(m => m.channelId !== id);
+  save(STORAGE.MILESTONES, milestones);
+
+  showToast('채널이 삭제되었습니다');
+  refreshAll();
+}
+
+// ── API 키 저장 ──────────────────────────────────────
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key || key === '********') {
+    showToast('API 키를 입력해주세요', 'error');
+    return;
+  }
+  localStorage.setItem(STORAGE.API_KEY, key);
+  checkApiKey();
+  showToast('API 키가 저장되었습니다!', 'success');
+}
+
+// ── 채널 카드 렌더링 ─────────────────────────────────
+function renderChannelCards() {
+  const container = document.getElementById('channelCards');
+  const channels = getChannels();
+  const snapshots = getSnapshots();
+
+  if (channels.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>등록된 채널이 없습니다</p><button class="btn btn-primary" onclick="openModal(\'settingsModal\')">채널 추가하기</button></div>';
+    return;
+  }
+
+  const today = toDateStr(new Date());
+  const weekAgo = toDateStr(new Date(Date.now() - 7 * 86400000));
+
+  let html = '';
+
+  for (const ch of channels) {
+    const current = getLatestSnapshot(ch.id, snapshots);
+    const past = getSnapshotNear(ch.id, weekAgo, snapshots);
+    const color = ch.color || '#6366f1';
+
+    const subChange = (current && past) ? current.subscribers - past.subscribers : null;
+    const viewChange = (current && past) ? current.views - past.views : null;
+    const vidChange = (current && past) ? current.videoCount - past.videoCount : null;
+
+    html += `
+      <div class="channel-card" style="background:linear-gradient(135deg, ${color}, ${hexToRgba(color,0.7)})">
+        <div class="channel-card-header">
+          ${ch.thumbnail ? `<img class="channel-thumb" src="${ch.thumbnail}" alt="${ch.name}" onerror="this.style.display='none'">` : ''}
+          <span class="channel-card-name">${ch.name || ch.id}</span>
+        </div>
+        <div class="channel-stats">
+          <div class="stat-item">
+            <span class="stat-value">${fmt(current?.subscribers || 0)}</span>
+            <span class="stat-label">구독자</span>
+            ${subChange !== null ? `<span class="stat-change ${subChange >= 0 ? 'positive' : 'negative'}">${subChange >= 0 ? '+' : ''}${fmt(subChange)} 이번주</span>` : ''}
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${fmt(current?.views || 0)}</span>
+            <span class="stat-label">조회수</span>
+            ${viewChange !== null ? `<span class="stat-change ${viewChange >= 0 ? 'positive' : 'negative'}">${viewChange >= 0 ? '+' : ''}${fmt(viewChange)} 이번주</span>` : ''}
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${current?.videoCount || 0}</span>
+            <span class="stat-label">영상</span>
+            ${vidChange !== null ? `<span class="stat-change ${vidChange >= 0 ? 'positive' : 'negative'}">${vidChange >= 0 ? '+' : ''}${vidChange} 이번주</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // 전체 합산 (2개 이상)
+  if (channels.length >= 2) {
+    let totalSub = 0, totalView = 0, totalVid = 0, weekSub = 0, weekView = 0;
+    for (const ch of channels) {
+      const cur = getLatestSnapshot(ch.id, snapshots);
+      const past = getSnapshotNear(ch.id, weekAgo, snapshots);
+      totalSub  += cur?.subscribers || 0;
+      totalView += cur?.views || 0;
+      totalVid  += cur?.videoCount || 0;
+      if (cur && past) { weekSub += cur.subscribers - past.subscribers; weekView += cur.views - past.views; }
+    }
+    html += `
+      <div class="channel-card total-card">
+        <div class="channel-card-header"><span class="channel-card-name">전체 합산</span></div>
+        <div class="channel-stats">
+          <div class="stat-item">
+            <span class="stat-value">${fmt(totalSub)}</span>
+            <span class="stat-label">총 구독자</span>
+            <span class="stat-change ${weekSub >= 0 ? 'positive' : 'negative'}">${weekSub >= 0 ? '+' : ''}${fmt(weekSub)} 이번주</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${fmt(totalView)}</span>
+            <span class="stat-label">총 조회수</span>
+            <span class="stat-change ${weekView >= 0 ? 'positive' : 'negative'}">${weekView >= 0 ? '+' : ''}${fmt(weekView)} 이번주</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">${totalVid}</span>
+            <span class="stat-label">총 영상</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// ── 히트맵 렌더링 ────────────────────────────────────
+function renderHeatmap() {
+  const year = parseInt(document.getElementById('heatmapYear').value) || new Date().getFullYear();
+  const channelFilter = document.getElementById('heatmapChannel').value;
+  const heatmap = document.getElementById('heatmap');
+  const tooltip = document.getElementById('tooltip');
+  heatmap.innerHTML = '';
+
+  // 업로드 데이터 집계
+  let videos = getVideos();
+  if (channelFilter) videos = videos.filter(v => v.channelId === channelFilter);
+
+  const uploadMap = {};
+  for (const v of videos) {
+    const d = v.publishedAt ? v.publishedAt.slice(0, 10) : null;
+    if (d && d.startsWith(String(year))) {
+      uploadMap[d] = (uploadMap[d] || 0) + 1;
+    }
+  }
+
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year, 11, 31);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const firstDow = startDate.getDay();
+
+  // 빈 셀
+  for (let i = 0; i < firstDow; i++) {
+    const spacer = document.createElement('div');
+    spacer.style.cssText = 'width:12px;height:12px';
+    heatmap.appendChild(spacer);
+  }
+
+  const cur = new Date(startDate);
+  while (cur <= endDate) {
+    const ds = toDateStr(cur);
+    const count = uploadMap[ds] || 0;
+    const isFuture = cur > today;
+
+    const cell = document.createElement('div');
+    cell.className = 'heatmap-cell' + (isFuture ? ' future' : '');
+    if (!isFuture) cell.setAttribute('data-level', getLevel(count));
+    cell.dataset.date = ds;
+    cell.dataset.count = count;
+
+    cell.addEventListener('mouseenter', e => {
+      const formatted = new Date(ds + 'T00:00:00').toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+      tooltip.textContent = count > 0 ? `${formatted} - ${count}개 업로드` : `${formatted} - 업로드 없음`;
+      tooltip.style.display = 'block';
+      tooltip.style.left = e.clientX + 12 + 'px';
+      tooltip.style.top = e.clientY - 40 + 'px';
+    });
+    cell.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+    heatmap.appendChild(cell);
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  // 월 라벨
+  const monthsEl = document.getElementById('heatmapMonths');
+  monthsEl.innerHTML = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
+    .map(m => `<span>${m}</span>`).join('');
+
+  // 스트릭 계산
+  renderStreak(videos);
+}
+
+function renderStreak(videos) {
+  const dates = [...new Set(videos.map(v => v.publishedAt ? v.publishedAt.slice(0, 10) : null).filter(Boolean))].sort().reverse();
+  const container = document.getElementById('streakInfo');
+
+  if (dates.length === 0) {
+    container.innerHTML = `
+      <div class="streak-item"><span>💤</span><span class="streak-number">0</span><span class="streak-label">현재 스트릭 (일)</span></div>
+      <div class="streak-item"><span>🏆</span><span class="streak-number">0</span><span class="streak-label">최장 스트릭 (일)</span></div>`;
+    return;
+  }
+
+  const today = toDateStr(new Date());
+  const yesterday = toDateStr(new Date(Date.now() - 86400000));
+
+  let currentStreak = 0;
+  if (dates[0] === today || dates[0] === yesterday) {
+    currentStreak = 1;
+    for (let i = 1; i < dates.length; i++) {
+      if (dayDiff(dates[i - 1], dates[i]) === 1) currentStreak++;
+      else break;
+    }
+  }
+
+  let longest = 1, temp = 1;
+  for (let i = 1; i < dates.length; i++) {
+    if (dayDiff(dates[i - 1], dates[i]) === 1) { temp++; }
+    else { longest = Math.max(longest, temp); temp = 1; }
+  }
+  longest = Math.max(longest, temp, currentStreak);
+
+  container.innerHTML = `
+    <div class="streak-item"><span>${currentStreak > 0 ? '🔥' : '💤'}</span><span class="streak-number">${currentStreak}</span><span class="streak-label">현재 스트릭 (일)</span></div>
+    <div class="streak-item"><span>🏆</span><span class="streak-number">${longest}</span><span class="streak-label">최장 스트릭 (일)</span></div>`;
+}
+
+function getLevel(c) { return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c <= 4 ? 3 : 4; }
+
+// ── 마일스톤 ─────────────────────────────────────────
+function renderMilestones() {
+  const container = document.getElementById('milestones');
+  const milestones = getMilestones();
+  const channels = getChannels();
+  const snapshots = getSnapshots();
+  const typeLabels = { subscribers: '구독자', videos: '영상', views: '조회수' };
+
+  if (milestones.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>설정된 목표가 없습니다</p></div>';
+    return;
+  }
+
+  let updated = false;
+
+  container.innerHTML = milestones.map((m, idx) => {
+    const ch = channels.find(c => c.id === m.channelId);
+    const snap = getLatestSnapshot(m.channelId, snapshots);
+    const typeMap = { subscribers: 'subscribers', videos: 'videoCount', views: 'views' };
+    const current = snap ? (snap[typeMap[m.type]] || 0) : 0;
+    const progress = Math.min(100, Math.round((current / m.target) * 100));
+    const remaining = Math.max(0, m.target - current);
+    const color = ch?.color || '#6366f1';
+    const isAchieved = !!m.achievedAt;
+
+    // 달성 체크
+    if (current >= m.target && !m.achievedAt) {
+      m.achievedAt = new Date().toISOString();
+      updated = true;
+      setTimeout(() => celebrate(), 500);
+    }
+
+    return `
+      <div class="milestone-item ${isAchieved ? 'achieved' : ''}">
+        <div class="milestone-color" style="background:${color}"></div>
+        <div class="milestone-info">
+          <div class="milestone-title">
+            ${isAchieved ? '✅' : '🎯'} ${typeLabels[m.type] || m.type} ${fmt(m.target)}
+            <span class="milestone-channel-badge" style="background:${color}">${ch?.name || ''}</span>
+          </div>
+          <div class="milestone-detail">
+            ${isAchieved
+              ? '달성 완료! (' + new Date(m.achievedAt).toLocaleDateString('ko-KR') + ')'
+              : '현재 ' + fmt(current) + ' / 남은 ' + fmt(remaining)}
+          </div>
+        </div>
+        <div class="milestone-progress-container">
+          <div class="milestone-progress-bar">
+            <div class="milestone-progress-fill" style="width:${progress}%;background:${color}"></div>
+          </div>
+          <div class="milestone-progress-text">${progress}%</div>
+        </div>
+        <button class="milestone-delete" onclick="deleteMilestone(${idx})" title="삭제">&times;</button>
+      </div>`;
+  }).join('');
+
+  if (updated) save(STORAGE.MILESTONES, milestones);
+}
+
+function openMilestoneModal() {
+  if (getChannels().length === 0) { showToast('먼저 채널을 추가해주세요', 'error'); return; }
+  openModal('milestoneModal');
+}
+
+function addMilestone() {
+  const channelId = document.getElementById('milestoneChannel').value;
+  const type = document.getElementById('milestoneType').value;
+  const target = parseInt(document.getElementById('milestoneValue').value);
+
+  if (!channelId || !type || !target || target <= 0) {
+    showToast('모든 항목을 올바르게 입력해주세요', 'error');
+    return;
+  }
+
+  const milestones = getMilestones();
+  milestones.push({ channelId, type, target, achievedAt: null });
+  save(STORAGE.MILESTONES, milestones);
+
+  document.getElementById('milestoneValue').value = '';
+  closeModal('milestoneModal');
+  showToast('목표가 추가되었습니다!', 'success');
+  renderMilestones();
+}
+
+function deleteMilestone(idx) {
+  if (!confirm('이 목표를 삭제하시겠습니까?')) return;
+  const milestones = getMilestones();
+  milestones.splice(idx, 1);
+  save(STORAGE.MILESTONES, milestones);
+  renderMilestones();
+}
+
+function celebrate() {
+  if (typeof confetti !== 'function') return;
+  confetti({ particleCount: 80, spread: 60, origin: { x: 0.1, y: 0.6 }, colors: ['#6366f1','#ec4899','#14b8a6','#f59e0b','#22c55e'] });
+  setTimeout(() => confetti({ particleCount: 80, spread: 60, origin: { x: 0.9, y: 0.6 }, colors: ['#6366f1','#ec4899','#14b8a6','#f59e0b','#22c55e'] }), 200);
+  showToast('🎉 마일스톤 달성! 축하합니다!', 'success');
+}
+
+// ── 월간 차트 ────────────────────────────────────────
+function renderMonthlyChart() {
+  const ctx = document.getElementById('monthlyChart').getContext('2d');
+  if (monthlyChartInstance) monthlyChartInstance.destroy();
+
+  const year = new Date().getFullYear();
+  const videos = getVideos();
+  const channels = getChannels();
+  const monthLabels = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  const channelMap = {};
+  for (const v of videos) {
+    if (!v.publishedAt || !v.publishedAt.startsWith(String(year))) continue;
+    const month = parseInt(v.publishedAt.slice(5, 7)) - 1;
+    if (!channelMap[v.channelId]) channelMap[v.channelId] = new Array(12).fill(0);
+    channelMap[v.channelId][month]++;
+  }
+
+  const datasets = [];
+  if (Object.keys(channelMap).length === 0) {
+    datasets.push({ label: '업로드', data: new Array(12).fill(0), backgroundColor: 'rgba(99,102,241,0.5)', borderColor: '#6366f1', borderWidth: 2, borderRadius: 6 });
+  } else {
+    for (const [chId, counts] of Object.entries(channelMap)) {
+      const ch = channels.find(c => c.id === chId);
+      const color = ch?.color || '#6366f1';
+      datasets.push({ label: ch?.name || chId, data: counts, backgroundColor: hexToRgba(color, 0.6), borderColor: color, borderWidth: 2, borderRadius: 6 });
+    }
+  }
+
+  monthlyChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: monthLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: datasets.length > 1, position: 'top', labels: { usePointStyle: true, padding: 16 } },
+        tooltip: { backgroundColor: '#1e293b', padding: 10, cornerRadius: 8, callbacks: { label: c => c.dataset.label + ': ' + c.raw + '개 업로드' } },
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1, color: '#64748b' }, grid: { color: '#f1f5f9' } },
+        x: { ticks: { color: '#64748b' }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+// ── 데이터 내보내기/가져오기 ─────────────────────────
+function exportData() {
+  const data = {
+    channels: getChannels(),
+    snapshots: getSnapshots(),
+    videos: getVideos(),
+    milestones: getMilestones(),
+    exportedAt: new Date().toISOString(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'youtube-dashboard-backup-' + toDateStr(new Date()) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('데이터를 내보냈습니다', 'success');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.channels) save(STORAGE.CHANNELS, data.channels);
+      if (data.snapshots) save(STORAGE.SNAPSHOTS, data.snapshots);
+      if (data.videos) save(STORAGE.VIDEOS, data.videos);
+      if (data.milestones) save(STORAGE.MILESTONES, data.milestones);
+      showToast('데이터를 가져왔습니다!', 'success');
+      refreshAll();
+    } catch {
+      showToast('올바른 JSON 파일이 아닙니다', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ── UI 헬퍼 ──────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function updateChannelSelects() {
+  const channels = getChannels();
+
+  const heatmapSel = document.getElementById('heatmapChannel');
+  heatmapSel.innerHTML = '<option value="">전체 채널</option>' +
+    channels.map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('');
+
+  const milestoneSel = document.getElementById('milestoneChannel');
+  milestoneSel.innerHTML = channels.map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('');
+}
+
+function updateRegisteredChannels() {
+  const container = document.getElementById('registeredChannels');
+  const channels = getChannels();
+
+  if (channels.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.85rem">등록된 채널이 없습니다</p>';
+    return;
+  }
+
+  container.innerHTML = channels.map(ch => `
+    <div class="registered-channel">
+      <div class="registered-channel-info">
+        <div class="registered-channel-color" style="background:${ch.color}"></div>
+        ${ch.thumbnail ? `<img class="registered-channel-thumb" src="${ch.thumbnail}" onerror="this.style.display='none'">` : ''}
+        <span>${ch.name || ch.id}</span>
+      </div>
+      <button class="btn btn-danger btn-small" onclick="removeChannel('${ch.id}')">삭제</button>
+    </div>
+  `).join('');
+}
+
+function initColorPicker() {
+  document.querySelectorAll('.color-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.color-option').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedColor = btn.dataset.color;
+    });
+  });
+}
+
+function initYearSelect() {
+  const sel = document.getElementById('heatmapYear');
+  const yr = new Date().getFullYear();
+  for (let y = yr; y >= yr - 3; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + '년';
+    sel.appendChild(o);
+  }
+}
+
+// ── 스냅샷 헬퍼 ──────────────────────────────────────
+function getLatestSnapshot(channelId, snapshots) {
+  let latest = null;
+  for (const [key, snap] of Object.entries(snapshots)) {
+    if (snap.channelId === channelId) {
+      if (!latest || snap.date > latest.date) latest = snap;
+    }
+  }
+  return latest;
+}
+
+function getSnapshotNear(channelId, targetDate, snapshots) {
+  let best = null;
+  for (const snap of Object.values(snapshots)) {
+    if (snap.channelId === channelId && snap.date <= targetDate) {
+      if (!best || snap.date > best.date) best = snap;
+    }
+  }
+  return best;
+}
+
+// ── 유틸리티 ─────────────────────────────────────────
+function toDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function dayDiff(a, b) {
+  return (new Date(a) - new Date(b)) / 86400000;
+}
+
+function fmt(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function showToast(msg, type = '') {
+  const old = document.querySelector('.toast');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// 모달 외부 클릭으로 닫기
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) {
+    e.target.classList.remove('active');
+  }
+});
+</script>
+</body>
+</html>
