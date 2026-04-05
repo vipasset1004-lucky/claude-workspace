@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>주봉 다이버전스 스크리너</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    background: #0a0e17;
+    color: #e1e5ee;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #0d1321 0%, #1a1f35 100%);
+    border-bottom: 1px solid #1e2a45;
+    padding: 16px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #00d4ff, #7b61ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 2px;
+  }
+
+  .header .sub {
+    font-size: 12px;
+    color: #6b7a99;
+    margin-bottom: 12px;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  select, button {
+    background: #141a2e;
+    border: 1px solid #2a3555;
+    color: #c8d0e0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 0l6 6 6-6z' fill='%236b7a99'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  .btn-scan {
+    background: linear-gradient(135deg, #4a6cf7, #7b61ff);
+    border: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    grid-column: 1 / -1;
+    padding: 12px;
+  }
+
+  .btn-scan:active { opacity: .8; }
+
+  .status-bar {
+    background: #0d1321;
+    border-bottom: 1px solid #1e2a45;
+    padding: 10px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #6b7a99;
+  }
+
+  .status-bar .stat { display: flex; align-items: center; gap: 4px; }
+  .status-bar .stat .val { color: #00d4ff; font-weight: 600; }
+  .scan-progress { flex: 1; gap: 8px !important; min-width: 150px; }
+
+  .main { padding: 12px; }
+
+  .cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card {
+    background: #111827;
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card .rank {
+    position: absolute;
+    top: 0; right: 0;
+    background: linear-gradient(135deg, #4a6cf7, #7b61ff);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 0 12px 0 10px;
+  }
+
+  .card .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .card .name { font-size: 16px; font-weight: 700; color: #fff; }
+  .card .ticker { font-size: 11px; color: #6b7a99; margin-top: 2px; }
+
+  /* ── 점수 바 (유니코드 별 대신 CSS 바) ── */
+  .score-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(74, 108, 247, .15);
+    color: #7b9aff;
+    white-space: nowrap;
+  }
+
+  .score-badge.high { background: rgba(0, 212, 255, .15); color: #00d4ff; }
+  .score-badge.very-high { background: rgba(0, 255, 136, .15); color: #00ff88; }
+
+  .score-dots {
+    display: flex;
+    gap: 3px;
+  }
+
+  .score-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2a3555;
+  }
+
+  .score-dot.filled { background: currentColor; }
+
+  .score-num {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* ── 지표 영역 ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .metric {
+    background: #0d1321;
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .metric .label {
+    font-size: 9px;
+    color: #4a5578;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 3px;
+  }
+
+  .metric .value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #c8d0e0;
+  }
+
+  .metric .value.negative { color: #ff4d6a; }
+  .metric .value.positive { color: #00ff88; }
+  .metric .value.warn { color: #ffaa00; }
+
+  .divergence-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+
+  .div-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: rgba(123, 97, 255, .12);
+    color: #a78bfa;
+    border: 1px solid rgba(123, 97, 255, .25);
+  }
+
+  .bonus-signals { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  .bonus-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: rgba(0, 255, 136, .08);
+    color: #34d399;
+    border: 1px solid rgba(0, 255, 136, .2);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #4a5578;
+  }
+
+  .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: #6b7a99; }
+
+  .disclaimer {
+    text-align: center;
+    padding: 16px;
+    font-size: 10px;
+    color: #3a4568;
+    border-top: 1px solid #1e2a45;
+    margin-top: 20px;
+  }
+
+  .log-area {
+    background: #0a0e17;
+    border: 1px solid #1e2a45;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    max-height: 80px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11px;
+    color: #4a5578;
+    display: none;
+  }
+
+  .log-area.active { display: block; }
+  .log-area .log-line { margin-bottom: 2px; }
+  .log-area .log-line.info { color: #00d4ff; }
+  .log-area .log-line.success { color: #00ff88; }
+
+  /* ── 데스크톱 (768px 이상) ── */
+  @media (min-width: 769px) {
+    .header { padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .header .sub { margin-bottom: 0; }
+    .header h1 { font-size: 22px; }
+    .controls { display: flex; gap: 10px; }
+    .controls select, .controls button { padding: 8px 14px; font-size: 13px; }
+    .btn-scan { grid-column: auto; padding: 8px 20px; }
+    .status-bar { padding: 10px 32px; }
+    .main { padding: 24px 32px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 16px;
+    }
+    .card { padding: 20px; }
+    .card .name { font-size: 17px; }
+    .metrics { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .metric { padding: 8px; }
+    .metric .value { font-size: 14px; }
+    .log-area { max-height: 150px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Weekly Bullish Divergence Screener</h1>
+    <div class="sub">주봉 상승 다이버전스 - 주가 하락 + 지표 상승 패턴</div>
+  </div>
+  <div class="controls">
+    <select id="market">
+      <option value="KR">한국 전체</option>
+      <option value="KOSPI">KOSPI</option>
+      <option value="KOSDAQ">KOSDAQ</option>
+      <option value="US">미국 주식</option>
+    </select>
+    <select id="topN">
+      <option value="50">50종목</option>
+      <option value="100" selected>100종목</option>
+      <option value="200">200종목</option>
+      <option value="300">300종목</option>
+    </select>
+    <select id="minScore">
+      <option value="1">1점 이상</option>
+      <option value="1.5" selected>1.5점 이상</option>
+      <option value="2">2점 이상</option>
+      <option value="3">3점 이상</option>
+    </select>
+    <button class="btn-scan" id="btnScan" onclick="startScan()">스캔 시작</button>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="stat">발견: <span class="val" id="foundCount">-</span></div>
+  <div class="stat">업데이트: <span class="val" id="lastUpdate">-</span></div>
+  <div class="stat scan-progress" id="scanProgress" style="display:none;">
+    <span id="progressText">스캔 중...</span>
+    <div style="flex:1;height:4px;background:#1e2a45;border-radius:2px;min-width:100px;overflow:hidden;">
+      <div id="progressFill" style="height:100%;background:linear-gradient(90deg,#4a6cf7,#00d4ff);width:0%;transition:width .3s;border-radius:2px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="log-area" id="logArea"></div>
+  <div class="cards" id="cardsContainer">
+    <div class="empty-state">
+      <h3>스캔을 시작하세요</h3>
+      <p>시장을 선택한 후 [스캔 시작]을 누르세요</p>
+    </div>
+  </div>
+</div>
+
+<div class="disclaimer">
+  기술적 분석 참고용 | 투자 추천이 아닙니다 | 투자 판단과 책임은 본인에게 있습니다
+</div>
+
+<script>
+const EMBEDDED_DATA = null; // __EMBED_MARKER__
+
+let allResults = [];
+
+function log(msg, type = '') {
+  const area = document.getElementById('logArea');
+  area.classList.add('active');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.textContent = msg;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+}
+
+let scanning = false;
+let eventSource = null;
+
+function filterAndRender() {
+  const minScore = parseFloat(document.getElementById('minScore').value);
+  const market = document.getElementById('market').value;
+
+  let filtered = allResults.filter(r => r.score >= minScore);
+
+  if (market === 'KOSPI' || market === 'KOSDAQ' || market === 'KR') {
+    filtered = filtered.filter(r => /^\d{6}$/.test(r.ticker));
+  } else if (market === 'US') {
+    filtered = filtered.filter(r => !/^\d{6}$/.test(r.ticker));
+  }
+
+  filtered.sort((a, b) => b.score - a.score);
+  document.getElementById('foundCount').textContent = filtered.length + '개';
+  renderCards(filtered);
+  return filtered.length;
+}
+
+function showProgress(show, text, pct) {
+  const el = document.getElementById('scanProgress');
+  el.style.display = show ? 'flex' : 'none';
+  if (text) document.getElementById('progressText').textContent = text;
+  if (pct !== undefined) document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function startScan() {
+  const btn = document.getElementById('btnScan');
+
+  // 이미 임베드 데이터만 있고 서버 없는 환경 (GitHub Pages)
+  if (EMBEDDED_DATA && !isServerAvailable) {
+    const count = filterAndRender();
+    btn.textContent = count + '개 표시';
+    setTimeout(() => { btn.textContent = '스캔 시작'; }, 1500);
+    return;
+  }
+
+  // 스캔 중이면 중단
+  if (scanning && eventSource) {
+    eventSource.close();
+    scanning = false;
+    btn.textContent = '스캔 시작';
+    showProgress(false);
+    return;
+  }
+
+  // 실시간 스캔 시작
+  const market = document.getElementById('market').value;
+  const topN = document.getElementById('topN') ? document.getElementById('topN').value : '100';
+  const minScore = document.getElementById('minScore').value;
+
+  scanning = true;
+  allResults = [];
+  btn.textContent = '중단';
+  btn.style.background = '#ff4d6a';
+  document.getElementById('cardsContainer').innerHTML = '';
+  showProgress(true, '종목 리스트 수집 중...', 0);
+
+  const url = `/api/scan?market=${market}&top_n=${topN}&min_score=${minScore}`;
+  eventSource = new EventSource(url);
+
+  eventSource.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    switch (data.type) {
+      case 'status':
+        showProgress(true, data.message, data.progress || 0);
+        log(data.message, 'info');
+        break;
+
+      case 'progress':
+        showProgress(true, `${data.index}/${data.total} ${data.current} (발견: ${data.found}개)`, data.progress);
+        break;
+
+      case 'found':
+        // 발견 즉시 카드 추가
+        allResults.push(data.result);
+        allResults.sort((a, b) => b.score - a.score);
+        document.getElementById('foundCount').textContent = data.found_total + '개';
+        renderCards(allResults);
+        log(`발견: ${data.result.name} (${data.result.score}점)`, 'success');
+        break;
+
+      case 'complete':
+        allResults = data.results;
+        document.getElementById('foundCount').textContent = data.total_found + '개';
+        document.getElementById('lastUpdate').textContent = new Date(data.scan_date).toLocaleString('ko-KR');
+        renderCards(allResults);
+        log(`스캔 완료! ${data.total_found}개 발견`, 'success');
+        endScan();
+        break;
+
+      case 'error':
+        log(data.message, 'warn');
+        endScan();
+        break;
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (scanning) {
+      // 서버 없는 환경 - 임베드 데이터 또는 fetch 시도
+      eventSource.close();
+      scanning = false;
+      isServerAvailable = false;
+      btn.style.background = '';
+      btn.textContent = '스캔 시작';
+      showProgress(false);
+
+      // 임베드 데이터가 있으면 그걸 사용
+      if (EMBEDDED_DATA && EMBEDDED_DATA.results) {
+        allResults = EMBEDDED_DATA.results;
+        filterAndRender();
+        log('서버 없음 - 저장된 데이터 표시', 'info');
+      } else {
+        // fetch 시도
+        fetch('divergence_results.json?t=' + Date.now())
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(data => {
+            allResults = data.results || [];
+            document.getElementById('lastUpdate').textContent = new Date(data.scan_date).toLocaleString('ko-KR');
+            filterAndRender();
+          })
+          .catch(() => {
+            document.getElementById('cardsContainer').innerHTML = `
+              <div class="empty-state">
+                <h3>서버에 연결할 수 없습니다</h3>
+                <p>PC에서 서버를 실행하세요:</p>
+                <p style="margin-top:10px;font-family:monospace;color:#00d4ff;font-size:12px;">
+                  python web_server.py
+                </p>
+              </div>
+            `;
+          });
+      }
+    }
+  };
+}
+
+function endScan() {
+  if (eventSource) eventSource.close();
+  scanning = false;
+  const btn = document.getElementById('btnScan');
+  btn.textContent = '스캔 시작';
+  btn.style.background = '';
+  showProgress(false);
+}
+
+let isServerAvailable = true;
+
+document.getElementById('minScore').addEventListener('change', () => {
+  if (allResults.length > 0 && !scanning) filterAndRender();
+});
+document.getElementById('market').addEventListener('change', () => {
+  if (allResults.length > 0 && !scanning) filterAndRender();
+});
+
+function makeScoreDots(score) {
+  const full = Math.floor(score);
+  const max = 5;
+  let html = '<div class="score-dots">';
+  for (let i = 0; i < max; i++) {
+    html += `<div class="score-dot ${i < full ? 'filled' : ''}"></div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderCards(results) {
+  const container = document.getElementById('cardsContainer');
+
+  if (!results.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>조건에 맞는 종목이 없습니다</h3>
+        <p>최소 점수를 낮춰보세요</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = results.map((r, i) => {
+    const scoreClass = r.score >= 3 ? 'very-high' : r.score >= 2 ? 'high' : '';
+    const priceClass = r.price_change_pct < 0 ? 'negative' : 'positive';
+    const rsiClass = r.current_rsi < 30 ? 'positive' : r.current_rsi < 40 ? 'warn' : '';
+    const stochClass = r.current_stoch < 25 ? 'positive' : r.current_stoch < 35 ? 'warn' : '';
+    const isKR = r.ticker && /^\d{6}$/.test(r.ticker);
+    const priceStr = isKR
+      ? Number(r.current_price).toLocaleString() + '원'
+      : '$' + Number(r.current_price).toLocaleString(undefined, {minimumFractionDigits:2});
+
+    const divTags = Object.keys(r.divergences || {}).map(d =>
+      `<span class="div-tag">${d}</span>`
+    ).join('');
+
+    const bonusTags = (r.bonus_signals || []).map(s =>
+      `<span class="bonus-tag">${s}</span>`
+    ).join('');
+
+    return `
+      <div class="card">
+        <div class="rank">#${i + 1}</div>
+        <div class="top-row">
+          <div>
+            <div class="name">${r.name}</div>
+            <div class="ticker">${r.ticker}</div>
+          </div>
+          <div class="score-badge ${scoreClass}">
+            ${makeScoreDots(r.score)}
+            <span class="score-num">${r.score}</span>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="label">현재가</div>
+            <div class="value">${priceStr}</div>
+          </div>
+          <div class="metric">
+            <div class="label">주가변화</div>
+            <div class="value ${priceClass}">${r.price_change_pct > 0 ? '+' : ''}${r.price_change_pct}%</div>
+          </div>
+          <div class="metric">
+            <div class="label">RSI</div>
+            <div class="value ${rsiClass}">${r.current_rsi}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Stoch</div>
+            <div class="value ${stochClass}">${r.current_stoch}</div>
+          </div>
+        </div>
+        <div class="divergence-tags">${divTags}</div>
+        ${bonusTags ? `<div class="bonus-signals">${bonusTags}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+window.addEventListener('load', () => {
+  if (EMBEDDED_DATA && EMBEDDED_DATA.results) {
+    allResults = EMBEDDED_DATA.results;
+    document.getElementById('lastUpdate').textContent =
+      new Date(EMBEDDED_DATA.scan_date).toLocaleString('ko-KR');
+    filterAndRender();
+  }
+});
+</script>
+
+</body>
+</html>
