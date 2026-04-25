@@ -113,16 +113,21 @@ def get_new_listings(existing_tickers, cache_path="new_listings_cache.json", cac
     existing_tickers: 기존 유니버스(fallback)에 있는 ticker set/list (제외용)
     반환: [{"ticker","name","themes":["신규상장"],"is_new_listing":True,"listing_date":"YYYY-MM-DD","weeks_available":N}]
     """
-    # 1) 캐시 확인
+    # 1) 캐시 확인 (구버전 themes:["신규상장"] 이면 강제 갱신)
     if not force_refresh:
         try:
             if os.path.exists(cache_path):
                 with open(cache_path, "r", encoding="utf-8") as f:
                     cached = json.load(f)
                 updated = datetime.fromisoformat(cached.get("updated_at", "1970-01-01"))
-                if (datetime.now() - updated).days < cache_days:
-                    print(f"  [cache] 신규상장 {len(cached.get('listings', []))}개 로드 ({updated.strftime('%Y-%m-%d')})")
-                    return cached.get("listings", [])
+                listings = cached.get("listings", [])
+                # 구버전 감지: themes가 ["신규상장"] 단독인 항목이 있으면 갱신
+                is_old_format = any(l.get("themes") == ["신규상장"] for l in listings[:3])
+                if not is_old_format and (datetime.now() - updated).days < cache_days:
+                    print(f"  [cache] 신규상장 {len(listings)}개 로드 ({updated.strftime('%Y-%m-%d')})")
+                    return listings
+                if is_old_format:
+                    print("  [cache] 신규상장 구버전 캐시 감지 → 재생성")
         except Exception as e:
             print(f"  [cache] 신규상장 캐시 읽기 실패: {e}")
 
