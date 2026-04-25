@@ -152,18 +152,22 @@ def get_new_listings(existing_tickers, cache_path="new_listings_cache.json", cac
 
         existing_set = set(existing_tickers)
         recent = recent[~recent["종목코드"].isin(existing_set)]
+        # 스팩 제외 (합병 목적 페이퍼컴퍼니, 기술적 분석 의미 없음)
+        recent = recent[~recent["회사명"].str.contains("스팩", na=False)]
         recent = recent.sort_values("상장일", ascending=False).head(max_candidates)
         print(f"  신규상장 후보: {len(recent)}개 (상장일 {lower.date()} ~ {upper.date()})")
 
-        # 업종 → 짧은 테마명 변환
+        # 업종 → 짧은 테마명 변환 (인코딩 깨진 문자 제거)
         def parse_sector(업종_str):
             if not isinstance(업종_str, str) or not 업종_str.strip():
                 return []
-            s = 업종_str.strip()
-            for suffix in ["제조업", "판매업", "서비스업", "공급업", "개발업", "운영업", "임대업", "관련업"]:
+            # 인코딩 깨진 문자 제거 (서로게이트 등)
+            s = 업종_str.encode("utf-8", errors="ignore").decode("utf-8").strip()
+            if not s:
+                return []
+            for suffix in ["제조업", "판매업", "서비스업", "공급업", "개발업", "운영업", "임대업", "관련업", "업"]:
                 s = s.replace(suffix, "").strip()
             s = s.replace("및", "").replace("의", "").strip()
-            # 너무 길면 앞 4글자만
             parts = [p.strip() for p in s.split() if len(p.strip()) >= 2]
             return [parts[0]] if parts else []
 

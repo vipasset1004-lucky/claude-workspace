@@ -17,7 +17,11 @@ import json
 import time
 import threading
 import gc
+import os
+import math
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
 
 app = Flask(__name__)
 
@@ -241,7 +245,7 @@ def scan_single():
         if result.get("return_3m") is None or (isinstance(result.get("return_3m"), float) and math.isnan(result["return_3m"])):
             if weekly_return_3m is not None:
                 result["return_3m"] = weekly_return_3m
-                result["is_overheated"] = weekly_return_3m > 50
+                result["is_overheated"] = bool(weekly_return_3m > 50)
             else:
                 result["return_3m"] = 0
 
@@ -250,6 +254,167 @@ def scan_single():
         return jsonify({"result": result})
     except Exception as e:
         return jsonify({"error": str(e)})
+
+
+CACHE_PATH = "scan_results_cache.json"
+
+
+@app.route("/api/cached-results")
+def cached_results():
+    """자동 스캔으로 저장된 결과 반환"""
+    if not os.path.exists(CACHE_PATH):
+        return jsonify({"results": [], "scan_date": None, "total": 0})
+    try:
+        with open(CACHE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"results": [], "scan_date": None, "total": 0, "error": str(e)})
+
+
+def auto_scan_job():
+    """매일 21:00 자동 스캔 (527개 전체 + 신규상장) → 파일 저장"""
+    # 이미 오늘 스캔됐으면 건너뜀 (worker 중복 방지)
+    if os.path.exists(CACHE_PATH):
+        try:
+            with open(CACHE_PATH, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            saved_date = cached.get("scan_date", "")[:10]
+            if saved_date == datetime.now().strftime("%Y-%m-%d"):
+                print("[auto_scan] 오늘 이미 스캔됨, 건너뜀")
+                return
+        except Exception:
+            pass
+
+    if scan_state["running"]:
+        print("[auto_scan] 수동 스캔 중, 건너뜀")
+        return
+
+    scan_state["running"] = True
+    print(f"[auto_scan] 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    results = []
+
+    try:
+        tickers = get_fallback_tickers(9999)  # 전체 (527개)
+        existing = {t["ticker"] for t in tickers}
+        try:
+            if os.path.exists("new_listings_cache.json"):
+                with open("new_listings_cache.json", "r", encoding="utf-8") as f:
+                    nl_cached = json.load(f)
+                new_listings = nl_cached.get("listings", [])
+                new_listings = [l for l in new_listings if l["ticker"] not in existing]
+                tickers = tickers + new_listings
+        except Exception:
+            pass
+
+        min_score = 2.0
+        candidates = []
+
+        # 1단계: 주봉 스캔
+        for i, t in enumerate(tickers):
+            ticker = t["ticker"]
+            name = t["name"]
+            if i % 50 == 0:
+                print(f"[auto_scan] 1단계 {i+1}/{len(tickers)} ({name})")
+            try:
+                df = fetch_weekly_data(ticker, is_korean=True)
+                if df is None:
+                    continue
+                df = calculate_indicators(df)
+                if df is None:
+                    continue
+                s100 = score_100(df)
+                if not s100 or s100["score_10"] < min_score:
+                    del df
+                    continue
+                close_vals = df["Close"].values
+                weekly_return_3m = None
+                if len(close_vals) >= 13 and close_vals[-13] > 0:
+                    weekly_return_3m = round(((close_vals[-1] / close_vals[-13]) - 1) * 100, 1)
+                div_data = {}
+                if s100["score_10"] >= 2.0:
+                    div = detect_bullish_divergence(df)
+                    if div:
+                        div_data = {
+                            "divergence_count": div["divergence_count"],
+                            "divergences": {k: v for k, v in div["divergences"].items()},
+                            "div_score": div["score"],
+                            "bonus_signals": div.get("bonus_signals", []),
+                        }
+                candidates.append({"t": t, "s100": s100, "weekly_return_3m": weekly_return_3m, "div_data": div_data})
+                del df
+            except Exception:
+                pass
+            if i % 20 == 0:
+                gc.collect()
+            time.sleep(0.15)
+
+        gc.collect()
+        print(f"[auto_scan] 1단계 완료: {len(candidates)}개 후보")
+
+        # 2단계: 정밀 분석
+        for j, cand in enumerate(candidates):
+            t = cand["t"]
+            s100 = cand["s100"]
+            weekly_return_3m = cand["weekly_return_3m"]
+            ticker = t["ticker"]
+            name = t["name"]
+            if j % 20 == 0:
+                print(f"[auto_scan] 2단계 {j+1}/{len(candidates)} ({name})")
+            try:
+                div_data = cand["div_data"]
+                df_daily = fetch_daily_data(ticker, is_korean=True)
+                daily = score_daily(df_daily) if df_daily is not None else {
+                    "daily_score": None, "daily_signals": [], "daily_rsi": 0, "daily_vol_ratio": 0,
+                    "return_3m": None, "vol_trend_60d": 1.0, "is_overheated": False
+                }
+                del df_daily
+                earnings = get_earnings(ticker, is_korean=True) if s100["score_10"] >= 3.0 else {
+                    "earnings_type": "-", "revenue_growth": None, "earnings_growth": None, "operating_margin": None
+                }
+                themes = t.get("themes", [])
+                result = {"ticker": ticker, "name": name, "themes": themes, **s100, **daily, **div_data,
+                          "earnings_type": earnings.get("earnings_type", "-"),
+                          "revenue_growth": earnings.get("revenue_growth"),
+                          "earnings_growth": earnings.get("earnings_growth"),
+                          "operating_margin": earnings.get("operating_margin"),
+                          "is_new_listing": bool(t.get("is_new_listing")),
+                          "listing_date": t.get("listing_date"),
+                          "weeks_available": t.get("weeks_available")}
+                if result.get("return_3m") is None or (isinstance(result.get("return_3m"), float) and math.isnan(result["return_3m"])):
+                    if weekly_return_3m is not None:
+                        result["return_3m"] = weekly_return_3m
+                        result["is_overheated"] = bool(weekly_return_3m > 50)
+                    else:
+                        result["return_3m"] = 0
+                d_score = daily["daily_score"] if daily["daily_score"] is not None else 0
+                result["total_score"] = round(s100["score_10"] * 0.7 + d_score * 0.3, 1)
+                results.append(result)
+            except Exception as e:
+                print(f"[auto_scan] 2단계 오류 {name}: {e}")
+            if j % 5 == 0:
+                gc.collect()
+            time.sleep(0.2)
+
+        results.sort(key=lambda x: x.get("total_score", 0), reverse=True)
+        scan_date = datetime.now().isoformat()
+        scan_state["last_results"] = results
+        scan_state["last_scan_date"] = scan_date
+
+        with open(CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"results": results, "scan_date": scan_date, "total": len(results)}, f, ensure_ascii=False)
+        print(f"[auto_scan] 완료: {len(results)}개 → {CACHE_PATH} 저장")
+
+    except Exception as e:
+        print(f"[auto_scan] 오류: {e}")
+    finally:
+        scan_state["running"] = False
+
+
+# 자동 스캔 스케줄러 (매일 21:00 KST)
+_scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Seoul"))
+_scheduler.add_job(auto_scan_job, "cron", hour=21, minute=0, id="daily_scan")
+_scheduler.start()
 
 
 @app.route("/api/scan")
@@ -286,33 +451,43 @@ def scan():
                 tickers = get_fallback_tickers(top_n)
                 existing = {t["ticker"] for t in tickers}
                 try:
-                    import os, json as _json
                     cache_path = "new_listings_cache.json"
                     new_listings = []
+                    need_refresh = False
+
                     if os.path.exists(cache_path):
-                        # 캐시 있으면 즉시 로드 (만료 여부 무관하게 사용)
                         with open(cache_path, "r", encoding="utf-8") as _f:
-                            _cached = _json.load(_f)
-                        new_listings = _cached.get("listings", [])
+                            _cached = _f.read()
+                        _cached = json.loads(_cached)
+                        listings = _cached.get("listings", [])
                         updated = datetime.fromisoformat(_cached.get("updated_at", "1970-01-01"))
-                        # 만료됐으면 백그라운드에서 조용히 갱신
-                        if (datetime.now() - updated).days >= 7:
-                            def _refresh():
-                                try:
-                                    get_new_listings(existing, force_refresh=True)
-                                except Exception:
-                                    pass
-                            threading.Thread(target=_refresh, daemon=True).start()
-                            print("[scan] 신규상장 캐시 만료 → 백그라운드 갱신 시작")
+
+                        # 구버전 감지: themes가 ["신규상장"] 단독인 항목
+                        is_old_format = any(l.get("themes") == ["신규상장"] for l in listings[:5])
+                        is_expired = (datetime.now() - updated).days >= 7
+
+                        if is_old_format:
+                            print("[scan] 신규상장 구버전 캐시 감지 → 백그라운드 갱신")
+                            need_refresh = True
+                            new_listings = []  # 구버전은 쓰지 않음
+                        elif is_expired:
+                            print("[scan] 신규상장 캐시 만료 → 백그라운드 갱신, 구 캐시 사용")
+                            need_refresh = True
+                            new_listings = listings  # 만료됐어도 데이터는 사용
+                        else:
+                            new_listings = listings
                     else:
-                        # 캐시 없으면 백그라운드 생성, 이번 스캔은 신규상장 없이 진행
-                        def _build():
+                        print("[scan] 신규상장 캐시 없음 → 백그라운드 생성 (다음 스캔부터 포함)")
+                        need_refresh = True
+
+                    if need_refresh:
+                        def _refresh_cache():
                             try:
-                                get_new_listings(existing)
+                                get_new_listings(existing, force_refresh=True)
                             except Exception:
                                 pass
-                        threading.Thread(target=_build, daemon=True).start()
-                        print("[scan] 신규상장 캐시 없음 → 백그라운드 생성 시작 (다음 스캔부터 포함)")
+                        threading.Thread(target=_refresh_cache, daemon=True).start()
+
                     if new_listings:
                         tickers = tickers + new_listings
                 except Exception as e:
@@ -425,7 +600,7 @@ def scan():
                     if result.get("return_3m") is None or (isinstance(result.get("return_3m"), float) and math.isnan(result["return_3m"])):
                         if weekly_return_3m is not None:
                             result["return_3m"] = weekly_return_3m
-                            result["is_overheated"] = weekly_return_3m > 50
+                            result["is_overheated"] = bool(weekly_return_3m > 50)
                         else:
                             result["return_3m"] = 0
 
@@ -459,7 +634,6 @@ def scan():
 
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 8765))
     print("\n" + "=" * 50)
     print("  주봉 다이버전스 스크리너 서버")
