@@ -108,22 +108,23 @@ def get_krx_tickers(market="ALL", top_n=300):
 
 
 def get_new_listings(existing_tickers, cache_path="new_listings_cache.json", cache_days=7,
-                    min_weeks=52, max_weeks=104, max_candidates=80):
+                    min_weeks=52, max_weeks=104, max_candidates=80, force_refresh=False):
     """신규 상장 종목(주봉 52-104주) 수집 — KRX 상장일 기반 + 캐시
     existing_tickers: 기존 유니버스(fallback)에 있는 ticker set/list (제외용)
     반환: [{"ticker","name","themes":["신규상장"],"is_new_listing":True,"listing_date":"YYYY-MM-DD","weeks_available":N}]
     """
     # 1) 캐시 확인
-    try:
-        if os.path.exists(cache_path):
-            with open(cache_path, "r", encoding="utf-8") as f:
-                cached = json.load(f)
-            updated = datetime.fromisoformat(cached.get("updated_at", "1970-01-01"))
-            if (datetime.now() - updated).days < cache_days:
-                print(f"  [cache] 신규상장 {len(cached.get('listings', []))}개 로드 ({updated.strftime('%Y-%m-%d')})")
-                return cached.get("listings", [])
-    except Exception as e:
-        print(f"  [cache] 신규상장 캐시 읽기 실패: {e}")
+    if not force_refresh:
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                updated = datetime.fromisoformat(cached.get("updated_at", "1970-01-01"))
+                if (datetime.now() - updated).days < cache_days:
+                    print(f"  [cache] 신규상장 {len(cached.get('listings', []))}개 로드 ({updated.strftime('%Y-%m-%d')})")
+                    return cached.get("listings", [])
+        except Exception as e:
+            print(f"  [cache] 신규상장 캐시 읽기 실패: {e}")
 
     # 2) KRX corp list 수집
     try:
