@@ -1460,8 +1460,10 @@ def score_100(df):
 
     # 위치 판단
     if n >= 52:
-        high_52w = max(high[-52:])
+        raw_high_52w = max(high[-52:])
         low_52w = min(low[-52:])
+        # yfinance 데이터 오류(권리락·분할 등) 이상치 제거: 현재가의 3배 초과 고가는 무시
+        high_52w = raw_high_52w if raw_high_52w <= close[-1] * 3 else max(h for h in high[-52:] if h <= close[-1] * 3) if any(h <= close[-1] * 3 for h in high[-52:]) else close[-1]
         price_range = high_52w - low_52w
         pct_from_high = close[-1] / high_52w * 100
         pct_from_low = (close[-1] - low_52w) / low_52w * 100 if low_52w > 0 else 0
