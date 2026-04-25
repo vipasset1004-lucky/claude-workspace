@@ -468,6 +468,12 @@
     border-color: #ff6060 !important;
     box-shadow: 0 0 10px rgba(255, 60, 60, .5);
   }
+  #repeatFilter.active {
+    background: rgba(100, 180, 255, .15) !important;
+    color: #64b4ff !important;
+    border-color: #64b4ff !important;
+    box-shadow: 0 0 8px rgba(100, 180, 255, .4);
+  }
   .filter-chip[data-div].active {
     background: rgba(123, 97, 255, .2) !important;
     color: #7b61ff !important;
@@ -788,6 +794,8 @@
   <div class="filter-chip" data-earnings="실적 급증" onclick="toggleEarningsFilter(this)" style="color:#ff6060;border-color:#5a1a1a;">실적 급증</div>
   <div class="filter-chip" data-earnings="실적 증가" onclick="toggleEarningsFilter(this)" style="color:#50e090;border-color:#1a4a2a;">실적 증가</div>
   <div class="filter-chip" data-earnings="흑자 전환" onclick="toggleEarningsFilter(this)" style="color:#7eb3ff;border-color:#1a2a5a;">흑자 전환</div>
+  <span style="color:#4a5578;margin-left:8px;">|</span>
+  <div class="filter-chip" id="repeatFilter" onclick="toggleRepeatFilter(this)" style="color:#64b4ff;border-color:#1a2a5a;" title="연속 2회 이상 스캔에 등장한 종목만 표시">🔁 연속 등장</div>
 </div>
 
 <div id="cacheNotice" style="display:none;text-align:center;padding:6px 16px;background:#1a2a45;color:#7eb3ff;font-size:13px;border-bottom:1px solid #1e2a45;"></div>
@@ -880,6 +888,7 @@ let activeGapFilter = 0;
 let activeComboFilter = '';
 let activeNewFilter = false;
 let activeEarningsFilters = [];
+let activeRepeatFilter = false;
 let searchQuery = '';
 
 function computeGap(r) {
@@ -924,6 +933,11 @@ function toggleComboFilter(el) {
 function toggleNewFilter(el) {
   activeNewFilter = !el.classList.contains('active');
   el.classList.toggle('active');
+  if (allResults.length > 0 && !scanning) filterAndRender();
+}
+function toggleRepeatFilter(el) {
+  activeRepeatFilter = !activeRepeatFilter;
+  el.classList.toggle('active', activeRepeatFilter);
   if (allResults.length > 0 && !scanning) filterAndRender();
 }
 function toggleEarningsFilter(el) {
@@ -1119,6 +1133,11 @@ function filterAndRender() {
   // 실적 필터 (복수 선택 OR 조건)
   if (activeEarningsFilters.length > 0) {
     filtered = filtered.filter(r => activeEarningsFilters.includes(r.earnings_type));
+  }
+
+  // 연속 등장 필터
+  if (activeRepeatFilter) {
+    filtered = filtered.filter(r => !r.is_new_listing && prevTickers.has(r.ticker));
   }
 
   // 종목 검색 (종목명 or 티커)
