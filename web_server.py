@@ -335,7 +335,8 @@ def auto_scan_job():
                 if df is None:
                     continue
                 s100 = score_100(df)
-                if not s100 or s100["score_10"] < min_score:
+                effective_min = 1.5 if t.get("is_new_listing") else min_score
+                if not s100 or s100["score_10"] < effective_min:
                     del df
                     continue
                 close_vals = df["Close"].values
@@ -537,7 +538,9 @@ def scan():
                     if not s100 or s100["score_100"] <= 0 or len(s100["signals"]) < 1:
                         del df
                         continue
-                    if s100["score_10"] < min_score:
+                    # 신규상장은 데이터 부족으로 점수가 낮을 수 있어 별도 기준 적용
+                    effective_min = 1.5 if t.get("is_new_listing") else min_score
+                    if s100["score_10"] < effective_min:
                         del df
                         continue
 
