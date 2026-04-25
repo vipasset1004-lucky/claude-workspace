@@ -778,6 +778,7 @@
   <div class="filter-chip" data-pos="신고가 돌파" onclick="togglePosFilter(this)" style="color:#ff4d6a;border-color:#4a1a2a;">신고가 돌파</div>
 </div>
 
+<div id="cacheNotice" style="display:none;text-align:center;padding:6px 16px;background:#1a2a45;color:#7eb3ff;font-size:13px;border-bottom:1px solid #1e2a45;"></div>
 <div class="status-bar">
   <div class="stat">발견: <span class="val" id="foundCount">-</span></div>
   <div class="stat">업데이트: <span class="val" id="lastUpdate">-</span></div>
@@ -837,6 +838,8 @@ let allResults = [];
       const dt = new Date(data.scan_date).toLocaleString('ko-KR');
       document.getElementById('lastUpdate').textContent = dt + ' (자동 스캔)';
       document.getElementById('foundCount').textContent = data.total + '개';
+      const notice = document.getElementById('cacheNotice');
+      if (notice) { notice.textContent = '📅 자동 스캔 기준: ' + dt; notice.style.display = 'block'; }
       filterAndRender();
     }
   } catch(e) {}
