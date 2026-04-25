@@ -462,6 +462,12 @@
     border-color: #6bffb0 !important;
     box-shadow: 0 0 8px rgba(107, 255, 176, .4);
   }
+  .filter-chip[data-combo="premium"].active {
+    background: rgba(255, 60, 60, .15) !important;
+    color: #ff6060 !important;
+    border-color: #ff6060 !important;
+    box-shadow: 0 0 10px rgba(255, 60, 60, .5);
+  }
   .filter-chip[data-div].active {
     background: rgba(123, 97, 255, .2) !important;
     color: #7b61ff !important;
@@ -757,6 +763,7 @@
   <div class="filter-chip" data-combo="early" onclick="toggleComboFilter(this)" style="color:#ffd76b;border-color:#5a4a1a;" title="주봉≥6.0 & 일봉≤3.5 (선점형) · 백테스트: 3M +18.6%, MAX≥50% 35.7%">⭐ 선점형</div>
   <div class="filter-chip" data-combo="prelaunch" onclick="toggleComboFilter(this)" style="color:#ffa84a;border-color:#5a3a1a;" title="주봉≥6.5 & 일봉≤4.5 (급등 직전) · 백테스트: MAX≥50% 60%, MAX≥100% 20% (n=5)">⚡ 급등 직전</div>
   <div class="filter-chip" data-combo="momentum" onclick="toggleComboFilter(this)" style="color:#6bffb0;border-color:#1a5a3a;" title="GAP≥3 & 주봉≥6 (최강 조합) · 백테스트: 3M +26.6%, MAX≥50% 46.7%">💎 최강 조합</div>
+  <div class="filter-chip" data-combo="premium" onclick="toggleComboFilter(this)" style="color:#ff6060;border-color:#5a1a1a;" title="매집비율 + 트렌드 + 점수≥3.0 · 백테스트 승률 80%+, 평균 수익 19%+">🔥 프리미엄</div>
   <span style="color:#4a5578;margin-left:8px;">|</span>
   <div class="filter-chip" data-new="1" onclick="toggleNewFilter(this)" style="color:#ff8fc8;border-color:#5a2a4a;" title="상장 52-104주 신규 상장 종목만 (완화 모드)">🆕 신규상장</div>
 </div>
@@ -1072,6 +1079,17 @@ function filterAndRender() {
       const w = r.score_10 || 0;
       const g = computeGap(r);
       return w >= 6.0 && g !== null && g >= 3;
+    });
+  } else if (activeComboFilter === 'premium') {
+    // 프리미엄: 점수≥3.0 + (매집비율 OR Pocket Pivot) + (트렌드 구조 OR 상대강도 가속)
+    // 백테스트 490건 기준 승률 80%+, 평균 수익 19%+
+    filtered = filtered.filter(r => {
+      const w = r.score_10 || 0;
+      if (w < 3.0) return false;
+      const sigs = (r.signals || []).join(' ');
+      const hasAccum = sigs.includes('매집비율') || sigs.includes('Pocket Pivot');
+      const hasTrend = sigs.includes('트렌드 구조 양호') || sigs.includes('상대강도 가속');
+      return hasAccum && hasTrend;
     });
   }
 

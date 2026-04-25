@@ -307,7 +307,7 @@ def auto_scan_job():
         except Exception:
             pass
 
-        min_score = 2.0
+        min_score = 2.5
         candidates = []
 
         # 1단계: 주봉 스캔
