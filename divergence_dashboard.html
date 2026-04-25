@@ -474,6 +474,12 @@
     border-color: #64b4ff !important;
     box-shadow: 0 0 8px rgba(100, 180, 255, .4);
   }
+  .filter-chip[data-combo="leader"].active {
+    background: rgba(255, 215, 0, .15) !important;
+    color: #ffd700 !important;
+    border-color: #ffd700 !important;
+    box-shadow: 0 0 10px rgba(255, 215, 0, .4);
+  }
   .filter-chip[data-div].active {
     background: rgba(123, 97, 255, .2) !important;
     color: #7b61ff !important;
@@ -770,6 +776,7 @@
   <div class="filter-chip" data-combo="prelaunch" onclick="toggleComboFilter(this)" style="color:#ffa84a;border-color:#5a3a1a;" title="주봉≥6.5 & 일봉≤4.5 (급등 직전) · 백테스트: MAX≥50% 60%, MAX≥100% 20% (n=5)">⚡ 급등 직전</div>
   <div class="filter-chip" data-combo="momentum" onclick="toggleComboFilter(this)" style="color:#6bffb0;border-color:#1a5a3a;" title="GAP≥3 & 주봉≥6 (최강 조합) · 백테스트: 3M +26.6%, MAX≥50% 46.7%">💎 최강 조합</div>
   <div class="filter-chip" data-combo="premium" onclick="toggleComboFilter(this)" style="color:#ff6060;border-color:#5a1a1a;" title="매집비율 + 트렌드 + 점수≥3.0 · 백테스트 승률 80%+, 평균 수익 19%+">🔥 프리미엄</div>
+  <div class="filter-chip" data-combo="leader" onclick="toggleComboFilter(this)" style="color:#ffd700;border-color:#5a4a00;" title="신고가 돌파 + 실적 증가/급증 · 리더주 필터 (백테스트 ret_3m 14%, 승률 66%, MAX≥100% 51%)">🏆 리더주</div>
   <span style="color:#4a5578;margin-left:8px;">|</span>
   <div class="filter-chip" data-new="1" onclick="toggleNewFilter(this)" style="color:#ff8fc8;border-color:#5a2a4a;" title="상장 52-104주 신규 상장 종목만 (완화 모드)">🆕 신규상장</div>
 </div>
@@ -1103,8 +1110,11 @@ function filterAndRender() {
     // 선점형: 주봉≥6.0 & 일봉≤3.5 (n=14, 3M +18.6%, MAX≥50% 35.7%)
     filtered = filtered.filter(r => (r.score_10 || 0) >= 6.0 && (r.daily_score ?? 99) <= 3.5);
   } else if (activeComboFilter === 'prelaunch') {
-    // 급등 직전: 주봉≥6.5 & 일봉≤4.5 (n=5, MAX≥50% 60%, MAX≥100% 20%)
-    filtered = filtered.filter(r => (r.score_10 || 0) >= 6.5 && (r.daily_score ?? 99) <= 4.5);
+    // 급등 직전: score≥4.0 + 5일선 돌파 (백테스트 n=13, ret_3m 21.5%, 승률 85%)
+    filtered = filtered.filter(r => {
+      const dsigs = (r.daily_signals || []).join(' ');
+      return (r.score_10 || 0) >= 4.0 && dsigs.includes('5일선 돌파');
+    });
   } else if (activeComboFilter === 'momentum') {
     // 최강 조합: GAP≥3 & 주봉≥6 (n=15, 3M +26.6%, MAX≥50% 46.7%)
     filtered = filtered.filter(r => {
@@ -1122,6 +1132,14 @@ function filterAndRender() {
       const hasAccum = sigs.includes('매집비율') || sigs.includes('Pocket Pivot');
       const hasTrend = sigs.includes('트렌드 구조 양호') || sigs.includes('상대강도 가속');
       return hasAccum && hasTrend;
+    });
+  } else if (activeComboFilter === 'leader') {
+    // 리더주: 신고가 돌파 + 실적 증가/급증 (백테스트 ret_3m 14%, 승률 66%, MAX≥100% 51%)
+    filtered = filtered.filter(r => {
+      const sigs = (r.signals || []).join(' ');
+      const hasBreakout = sigs.includes('신고가 돌파') || (r.position_label || '').includes('신고가');
+      const hasEarnings = r.earnings_type === '실적 증가' || r.earnings_type === '실적 급증';
+      return hasBreakout && hasEarnings;
     });
   }
 
