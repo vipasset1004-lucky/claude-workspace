@@ -972,6 +972,14 @@ def fetch_weekly_data(ticker_code, is_korean=True, weeks=104):
         if data.empty:
             return None
 
+        # 월~목 스캔 시 이번 주 미완성 주봉 제거 (금~일은 완성 캔들이므로 유지)
+        from datetime import timezone, timedelta as _td
+        kst = datetime.now(tz=timezone(_td(hours=9)))
+        if kst.weekday() <= 3:  # 0=월, 1=화, 2=수, 3=목
+            data = data.iloc[:-1]
+        if data.empty:
+            return None
+
         return data
     except:
         return None
