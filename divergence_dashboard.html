@@ -1149,15 +1149,12 @@ function filterAndRender() {
       return hasAccum && hasTrend;
     });
   } else if (activeComboFilter === 'superlaunch') {
-    // 초 급등 탐지: PP+OBV+VCP+MACD+정배열 + GAP≥2 + 바닥출발/상승초입 + 실적증가/흑자전환
+    // 초 급등 탐지: PP+OBV(필수) + MACD/정배열/VCP 중 1개+ + GAP≥2 + 위치 + 실적
     filtered = filtered.filter(r => {
       const sigs = (r.signals || []).join(' ');
-      const hasPP = sigs.includes('Pocket Pivot');
-      const hasOBV = sigs.includes('OBV 매집');
-      const hasVCP = sigs.includes('VCP 수축');
-      const hasMACD = sigs.includes('MACD 골든');
-      const hasMA = sigs.includes('정배열');
-      if (!(hasPP && hasOBV && hasVCP && hasMACD && hasMA)) return false;
+      if (!sigs.includes('Pocket Pivot') || !sigs.includes('OBV 매집')) return false;
+      const hasTrend = sigs.includes('MACD 골든') || sigs.includes('정배열') || sigs.includes('VCP 수축');
+      if (!hasTrend) return false;
       const g = computeGap(r);
       if (g === null || g < 2) return false;
       const pos = r.position_label || '';
