@@ -1169,7 +1169,7 @@ function filterAndRender() {
       return r.earnings_type === '실적 증가' || r.earnings_type === '실적 급증' || r.earnings_type === '흑자 전환';
     });
   } else if (activeComboFilter === 'today') {
-    // 오늘의 종목: 프리미엄 AND (바닥출발 OR 상승초입) AND GAP≥2
+    // 오늘의 종목: 프리미엄 AND (바닥출발 OR 상승초입)
     filtered = filtered.filter(r => {
       const w = r.score_10 || 0;
       if (w < 3.0) return false;
@@ -1178,9 +1178,7 @@ function filterAndRender() {
       const hasTrend = sigs.includes('트렌드 구조 양호') || sigs.includes('상대강도 가속');
       if (!hasAccum || !hasTrend) return false;
       const pos = r.position_label || '';
-      if (!pos.includes('바닥') && !pos.includes('상승 초입')) return false;
-      const g = computeGap(r);
-      return g !== null && g >= 2;
+      return pos.includes('바닥') || pos.includes('상승 초입');
     });
   } else if (activeComboFilter === 'leader') {
     // 리더주: 신고가 돌파 + score≥5.0 (섹터 주도주)
