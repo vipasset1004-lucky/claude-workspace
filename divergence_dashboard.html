@@ -1164,7 +1164,7 @@ function filterAndRender() {
       if (!hasTrend) return false;
       const g = computeGap(r);
       if (g === null || g < 2) return false;
-      const pos = r.position_label || '';
+      const pos = r.position || '';
       if (!pos.includes('바닥') && !pos.includes('상승 초입')) return false;
       return r.earnings_type === '실적 증가' || r.earnings_type === '실적 급증' || r.earnings_type === '흑자 전환';
     });
@@ -1177,13 +1177,13 @@ function filterAndRender() {
       const hasAccum = sigs.includes('매집비율') || sigs.includes('Pocket Pivot');
       const hasTrend = sigs.includes('트렌드 구조 양호') || sigs.includes('상대강도 가속');
       if (!hasAccum || !hasTrend) return false;
-      const pos = r.position_label || '';
+      const pos = r.position || '';
       return pos.includes('바닥') || pos.includes('상승 초입');
     });
   } else if (activeComboFilter === 'leader') {
     // 리더주: 신고가 돌파 + score≥5.0 (섹터 주도주)
     filtered = filtered.filter(r => {
-      const hasBreakout = (r.position_label || '').includes('신고가');
+      const hasBreakout = (r.position || '').includes('신고가');
       return hasBreakout && (r.score_10 || 0) >= 5.0;
     });
   } else if (activeComboFilter === 'rocket') {
