@@ -835,12 +835,14 @@
 const EMBEDDED_DATA = null; // __EMBED_MARKER__
 
 let allResults = [];
+let prevTickers = new Set();
 
 (async function loadCachedResults() {
   try {
     const res = await fetch('/api/cached-results');
     const data = await res.json();
     if (data.results && data.results.length > 0) {
+      prevTickers = new Set(data.prev_tickers || []);
       allResults = data.results;
       const dt = new Date(data.scan_date).toLocaleString('ko-KR');
       document.getElementById('lastUpdate').textContent = dt + ' (자동 스캔)';
@@ -1422,6 +1424,7 @@ function renderCards(results) {
             ${isTenbagger ? '<div class="tenbagger-badge">텐버거 포착</div>' : isPick ? '<div class="pick-badge">핵심 포착</div>' : ''}
             ${r.is_overheated || r.is_weekly_overheated ? '<div class="overheat-badge">과열 주의</div>' : ''}
             ${r.is_new_listing ? `<div class="new-badge" title="신규 상장 (${r.listing_date || ''}, ${r.weeks_available || '?'}주)">🆕 신규상장</div>` : ''}
+            ${!r.is_new_listing && prevTickers.size > 0 ? (prevTickers.has(r.ticker) ? `<div class="new-badge" style="background:rgba(100,180,255,.15);color:#64b4ff;border-color:#64b4ff;" title="어제도 등장한 종목">🔁 연속 등장</div>` : `<div class="new-badge" style="background:rgba(80,255,160,.12);color:#50ffa0;border-color:#50ffa0;" title="오늘 새로 등장한 종목">✨ 신규 진입</div>`) : ''}
             <div class="name">${r.name}${r.position && r.position !== '-' ? `<span class="position-tag ${r.position === '바닥 출발' ? 'bottom' : r.position === '상승 초입' ? 'early' : r.position === '상승 중반' ? 'mid' : 'high'}">${r.position}</span>` : ''}${r.surge_phase && r.surge_phase !== '미확인' ? `<span class="surge-tag ${r.surge_phase.includes('상승 추세') ? 'ready' : r.surge_phase.includes('전환') || r.surge_phase.includes('눌림') ? 'early' : r.surge_phase.includes('하락') ? 'down' : 'wait'}">${r.surge_phase}</span>` : ''}</div>
             <div class="ticker">${r.ticker}${r.earnings_type && r.earnings_type !== '-' ? `<span class="earnings-tag ${r.earnings_type === '실적 급증' ? 'surge' : r.earnings_type === '실적 증가' ? 'up' : r.earnings_type === '흑자 전환' ? 'turn' : r.earnings_type === '실적 감소' ? 'down' : 'loss'}">${r.earnings_type}</span>` : ''}</div>
             ${(r.themes||[]).length ? `<div class="theme-tags">${r.themes.map(t => `<span class="theme-tag">${t}</span>`).join('')}</div>` : ''}

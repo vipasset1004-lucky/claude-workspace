@@ -257,6 +257,7 @@ def scan_single():
 
 
 CACHE_PATH = "scan_results_cache.json"
+CACHE_PREV_PATH = "scan_results_cache_prev.json"
 
 
 @app.route("/api/cached-results")
@@ -267,6 +268,16 @@ def cached_results():
     try:
         with open(CACHE_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
+        # 어제 결과 티커 목록 추가 (연속 등장 표시용)
+        prev_tickers = set()
+        if os.path.exists(CACHE_PREV_PATH):
+            try:
+                with open(CACHE_PREV_PATH, "r", encoding="utf-8") as f2:
+                    prev = json.load(f2)
+                prev_tickers = {r["ticker"] for r in prev.get("results", [])}
+            except:
+                pass
+        data["prev_tickers"] = list(prev_tickers)
         return jsonify(data)
     except Exception as e:
         return jsonify({"results": [], "scan_date": None, "total": 0, "error": str(e)})
@@ -401,6 +412,10 @@ def auto_scan_job():
         scan_state["last_results"] = results
         scan_state["last_scan_date"] = scan_date
 
+        # 오늘 캐시를 어제 파일로 보관 후 새 결과 저장
+        if os.path.exists(CACHE_PATH):
+            import shutil
+            shutil.copy2(CACHE_PATH, CACHE_PREV_PATH)
         with open(CACHE_PATH, "w", encoding="utf-8") as f:
             json.dump({"results": results, "scan_date": scan_date, "total": len(results)}, f, ensure_ascii=False)
         print(f"[auto_scan] 완료: {len(results)}개 → {CACHE_PATH} 저장")
