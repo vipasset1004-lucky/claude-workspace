@@ -749,6 +749,7 @@
     <select id="sortBy" onchange="filterAndRender()" title="정렬 기준">
       <option value="total" selected>종합 순</option>
       <option value="gap">GAP 순</option>
+      <option value="prelaunch">급등 직전 순</option>
       <option value="weekly">주봉 순</option>
       <option value="daily">일봉 순</option>
     </select>
@@ -1187,6 +1188,15 @@ function filterAndRender() {
   const sortBy = document.getElementById('sortBy') ? document.getElementById('sortBy').value : 'total';
   if (sortBy === 'gap') {
     filtered.sort((a, b) => { const ga = computeGap(a), gb = computeGap(b); return (gb === null ? -999 : gb) - (ga === null ? -999 : ga); });
+  } else if (sortBy === 'prelaunch') {
+    // 급등 직전 순: 주봉≥6 AND 일봉≤4.5 조건 충족 종목 상단, 그 안에서 GAP 높은 순
+    filtered.sort((a, b) => {
+      const aCond = (a.score_10 || 0) >= 6.0 && (a.daily_score ?? 99) <= 4.5 ? 1 : 0;
+      const bCond = (b.score_10 || 0) >= 6.0 && (b.daily_score ?? 99) <= 4.5 ? 1 : 0;
+      if (bCond !== aCond) return bCond - aCond;
+      const ga = computeGap(a), gb = computeGap(b);
+      return (gb === null ? -999 : gb) - (ga === null ? -999 : ga);
+    });
   } else if (sortBy === 'weekly') {
     filtered.sort((a, b) => (b.score_10 || 0) - (a.score_10 || 0));
   } else if (sortBy === 'daily') {
