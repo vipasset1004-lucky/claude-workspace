@@ -1162,12 +1162,10 @@ function filterAndRender() {
       return r.earnings_type === '실적 증가' || r.earnings_type === '실적 급증' || r.earnings_type === '흑자 전환';
     });
   } else if (activeComboFilter === 'leader') {
-    // 리더주: 신고가 돌파 + 실적 증가/급증 (백테스트 ret_3m 14%, 승률 66%, MAX≥100% 51%)
+    // 리더주: 신고가 돌파 + score≥5.0 (섹터 주도주)
     filtered = filtered.filter(r => {
-      const sigs = (r.signals || []).join(' ');
-      const hasBreakout = sigs.includes('신고가 돌파') || (r.position_label || '').includes('신고가');
-      const hasEarnings = r.earnings_type === '실적 증가' || r.earnings_type === '실적 급증';
-      return hasBreakout && hasEarnings;
+      const hasBreakout = (r.position_label || '').includes('신고가');
+      return hasBreakout && (r.score_10 || 0) >= 5.0;
     });
   } else if (activeComboFilter === 'rocket') {
     // 떡상 준비: 같은 섹터 2개+ 동시 포착 + 주봉≥6 + 일봉≤4.5 (기관 섹터 로테이션 감지)
