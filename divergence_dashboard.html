@@ -783,6 +783,11 @@
   <div class="filter-chip" data-pos="상승 초입" onclick="togglePosFilter(this)" style="color:#00ff88;border-color:#1a4a2a;">상승 초입</div>
   <div class="filter-chip" data-pos="상승 중반" onclick="togglePosFilter(this)" style="color:#ffa500;border-color:#4a3a1a;">상승 중반</div>
   <div class="filter-chip" data-pos="신고가 돌파" onclick="togglePosFilter(this)" style="color:#ff4d6a;border-color:#4a1a2a;">신고가 돌파</div>
+  <span style="color:#4a5578;margin-left:8px;">|</span>
+  <span style="color:#50e090;font-size:11px;padding:5px 0;">실적:</span>
+  <div class="filter-chip" data-earnings="실적 급증" onclick="toggleEarningsFilter(this)" style="color:#ff6060;border-color:#5a1a1a;">실적 급증</div>
+  <div class="filter-chip" data-earnings="실적 증가" onclick="toggleEarningsFilter(this)" style="color:#50e090;border-color:#1a4a2a;">실적 증가</div>
+  <div class="filter-chip" data-earnings="흑자 전환" onclick="toggleEarningsFilter(this)" style="color:#7eb3ff;border-color:#1a2a5a;">흑자 전환</div>
 </div>
 
 <div id="cacheNotice" style="display:none;text-align:center;padding:6px 16px;background:#1a2a45;color:#7eb3ff;font-size:13px;border-bottom:1px solid #1e2a45;"></div>
@@ -874,6 +879,7 @@ let activeDivFilter = false;
 let activeGapFilter = 0;
 let activeComboFilter = '';
 let activeNewFilter = false;
+let activeEarningsFilters = [];
 let searchQuery = '';
 
 function computeGap(r) {
@@ -918,6 +924,16 @@ function toggleComboFilter(el) {
 function toggleNewFilter(el) {
   activeNewFilter = !el.classList.contains('active');
   el.classList.toggle('active');
+  if (allResults.length > 0 && !scanning) filterAndRender();
+}
+function toggleEarningsFilter(el) {
+  el.classList.toggle('active');
+  const val = el.dataset.earnings;
+  if (el.classList.contains('active')) {
+    activeEarningsFilters.push(val);
+  } else {
+    activeEarningsFilters = activeEarningsFilters.filter(f => f !== val);
+  }
   if (allResults.length > 0 && !scanning) filterAndRender();
 }
 function togglePosFilter(el) {
@@ -1098,6 +1114,11 @@ function filterAndRender() {
   // 신규상장 필터
   if (activeNewFilter) {
     filtered = filtered.filter(r => r.is_new_listing === true);
+  }
+
+  // 실적 필터 (복수 선택 OR 조건)
+  if (activeEarningsFilters.length > 0) {
+    filtered = filtered.filter(r => activeEarningsFilters.includes(r.earnings_type));
   }
 
   // 종목 검색 (종목명 or 티커)
